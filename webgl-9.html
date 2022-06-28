@@ -1,0 +1,81 @@
+<!-- 主要包括 片元着色器控制 -->
+
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script src="./WebGLBook-master/lib/cuon-matrix.js"></script>
+    <script src="./WebGLBook-master/lib/cuon-utils.js"></script>
+    <script src="./WebGLBook-master/lib/webgl-debug.js"></script>
+    <script src="./WebGLBook-master/lib/webgl-utils.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+  </head>
+
+  <body>
+    <canvas id="mycanvas" height="500" width="500"></canvas>
+    <script>
+      const canvas = document.getElementById('mycanvas')
+      const gl = getWebGLContext(canvas)
+      gl.clearColor(0, 0, 0, .1)
+      gl.clear(gl.COLOR_BUFFER_BIT)
+
+      // 顶点着色器
+      const VSHADER_SOURCE = `
+        attribute vec4 a_Position;
+        void main() {
+          gl_Position = a_Position;
+          gl_PointSize = 10.0;
+        }
+      `
+      // 片元其实是每一个像素, 每一个像素点都会执行一次片元着色器, 这就是光栅化
+      // 片元着色器
+      const FSHADER_SOURCE = `
+        void main() {
+          gl_FragColor = vec4(gl_FragCoord.x / 500.0, gl_FragCoord.y / 500.0, 0.0, 1.0);
+        }
+      `
+      // gl_FragCoord 是当前渲染片元的位置
+
+      // 初始化着色器
+      initShaders(gl, VSHADER_SOURCE, FSHADER_SOURCE)
+      // 设置顶点位置
+      const n = initVertexBuffers(gl)
+      // 绘制方式; 开始顶点; 总顶点数;
+      gl.drawArrays(gl.TRIANGLE_FAN, 0, n)
+
+      function initVertexBuffers(gl) {
+        const n = 4
+
+        const verticesSizes = new Float32Array([
+          0, 0,
+          0, 0.5,
+          0.5, 0.5,
+          0.5, 0,
+        ])
+
+        // 只使用一个缓冲区, 一个缓冲区中有多种数据
+        const vertexSizesBuffer = gl.createBuffer()
+        gl.bindBuffer(gl.ARRAY_BUFFER, vertexSizesBuffer)
+        gl.bufferData(gl.ARRAY_BUFFER, verticesSizes, gl.STATIC_DRAW)
+
+        // 创建缓冲区对象
+        const a_Position = gl.getAttribLocation(gl.program, 'a_Position')
+        gl.vertexAttribPointer(a_Position, 2, gl.FLOAT, false, 0, 0)
+        gl.enableVertexAttribArray(a_Position)
+
+        return n
+      }
+
+    </script>
+  </body>
+
+</html>

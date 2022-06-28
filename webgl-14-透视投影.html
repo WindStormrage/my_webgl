@@ -1,0 +1,150 @@
+<!-- 主要包括 透视投影矩阵 -->
+<!-- 投影矩阵 x 视图矩阵 x 模型矩阵 x position -->
+
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script src="./WebGLBook-master/lib/cuon-matrix.js"></script>
+    <script src="./WebGLBook-master/lib/cuon-utils.js"></script>
+    <script src="./WebGLBook-master/lib/webgl-debug.js"></script>
+    <script src="./WebGLBook-master/lib/webgl-utils.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+  </head>
+
+  <body>
+    <canvas id="mycanvas" height="500" width="500"></canvas>
+    <script>
+      const canvas = document.getElementById('mycanvas')
+      const gl = getWebGLContext(canvas)
+      gl.clearColor(0, 0, 0, .1)
+      gl.clear(gl.COLOR_BUFFER_BIT)
+
+      // 顶点着色器
+      const VSHADER_SOURCE = `
+        attribute vec4 a_Position;
+        attribute vec4 a_Color;
+        varying vec4 v_Color;
+        uniform mat4 u_ViewMatrix;
+        void main() {
+          gl_Position = u_ViewMatrix * a_Position;
+          // gl_Position = a_Position;
+          v_Color = a_Color;
+        }
+      `
+      // 片元其实是每一个像素, 每一个像素点都会执行一次片元着色器, 这就是光栅化
+      // 片元着色器
+      const FSHADER_SOURCE = `
+        precision mediump float;
+        varying vec4 v_Color;
+        void main() {
+          gl_FragColor = v_Color;
+        }
+      `
+      // gl_FragCoord 是当前渲染片元的位置
+
+      // 初始化着色器
+      initShaders(gl, VSHADER_SOURCE, FSHADER_SOURCE)
+
+      const u_ViewMatrix = gl.getUniformLocation(gl.program, 'u_ViewMatrix');
+      const viewMatrix = new Matrix4();
+
+      // 设置顶点位置
+      const n = initVertexBuffers(gl)
+
+
+      // 开启隐藏面消除功能
+      // 能够隐藏被遮盖的部分
+      gl.enable(gl.DEPTH_TEST)
+      // 清除深度缓存区
+      gl.clear(gl.DEPTH_BUFFER_BIT)
+
+      let keyChange = 1
+      document.addEventListener('keydown', e => {
+        if (e.keyCode === 39) {
+          keyChange += 0.1
+        }
+        if (e.keyCode === 37) {
+          keyChange -= 0.1
+        }
+        draw()
+      })
+      draw()
+
+      function draw() {
+        const g_near = keyChange, g_far = 100
+        console.log(g_near, g_far)
+        // 设置透视投影矩阵
+        viewMatrix
+          // 角度\宽高比\近裁面\远裁面
+          .setPerspective(30, 1, g_near, g_far)
+          .lookAt(0, 0, 5, 0, 0, -100, 0, 1, 0)
+
+        gl.uniformMatrix4fv(u_ViewMatrix, false, viewMatrix.elements)
+        gl.clear(gl.COLOR_BUFFER_BIT)
+        gl.drawArrays(gl.TRIANGLES, 0, n)
+      }
+
+      function initVertexBuffers(gl) {
+        const n = 18
+
+        const verticesSizes = new Float32Array([
+          // webgl只会根据渲染顺序来确定前后关系
+          0.75, 1.0, 0.0, 1.0, 0.0, 0.0,
+          0.25, -1.0, 0.0, 1.0, 0.0, 0.0,
+          1.25, -1.0, 0.0, 1.0, 0.0, 0.0,
+
+          0.75, 1.0, -2.0, 0.0, 1.0, 0.0,
+          0.25, -1.0, -2.0, 0.0, 1.0, 0.0,
+          1.25, -1.0, -2.0, 0.0, 1.0, 0.0,
+
+          0.75, 1.0, -4.0, 0.0, 0.0, 1.0,
+          0.25, -1.0, -4.0, 0.0, 0.0, 1.0,
+          1.25, -1.0, -4.0, 0.0, 0.0, 1.0,
+          
+          -0.75, 1.0, -4.0, 0.4, 1.0, 0.4,
+          -1.25, -1.0, -4.0, 0.4, 1.0, 0.4,
+          -0.25, -1.0, -4.0, 1.0, 0.4, 0.4,
+
+          -0.75, 1.0, -2.0, 1.0, 1.0, 0.4,
+          -1.25, -1.0, -2.0, 1.0, 1.0, 0.4,
+          -0.25, -1.0, -2.0, 1.0, 0.4, 0.4,
+
+          -0.75, 1.0, 0.0, 0.4, 0.4, 1.0,
+          -1.25, -1.0, 0.0, 0.4, 0.4, 1.0,
+          -0.25, -1.0, 0.0, 1.0, 0.4, 0.4,
+        ])
+
+        const FSIZE = verticesSizes.BYTES_PER_ELEMENT;
+
+        // 只使用一个缓冲区, 一个缓冲区中有多种数据
+        const vertexSizesBuffer = gl.createBuffer()
+        gl.bindBuffer(gl.ARRAY_BUFFER, vertexSizesBuffer)
+        gl.bufferData(gl.ARRAY_BUFFER, verticesSizes, gl.STATIC_DRAW)
+
+        // 创建缓冲区对象
+        const a_Position = gl.getAttribLocation(gl.program, 'a_Position')
+        gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, FSIZE * 6, 0)
+        gl.enableVertexAttribArray(a_Position)
+
+        // 创建缓冲区对象
+        const a_Color = gl.getAttribLocation(gl.program, 'a_Color')
+        gl.vertexAttribPointer(a_Color, 3, gl.FLOAT, false, FSIZE * 6, FSIZE * 3)
+        gl.enableVertexAttribArray(a_Color)
+
+        return n
+      }
+
+    </script>
+  </body>
+
+</html>

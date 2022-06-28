@@ -1,0 +1,117 @@
+<!-- 主要包括 纹理映射 -->
+
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script src="./WebGLBook-master/lib/cuon-matrix.js"></script>
+    <script src="./WebGLBook-master/lib/cuon-utils.js"></script>
+    <script src="./WebGLBook-master/lib/webgl-debug.js"></script>
+    <script src="./WebGLBook-master/lib/webgl-utils.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+  </head>
+
+  <body>
+    <canvas id="mycanvas" height="500" width="500"></canvas>
+    <script>
+      const canvas = document.getElementById('mycanvas')
+      const gl = getWebGLContext(canvas)
+
+      // 顶点着色器
+      const VSHADER_SOURCE = `
+        attribute vec4 a_Position;
+        attribute vec2 a_TexCoord;
+        varying vec2 v_TexCoord;
+        void main() {
+          gl_Position = a_Position;
+          v_TexCoord = a_TexCoord;
+        }
+      `
+      // 片元其实是每一个像素, 每一个像素点都会执行一次片元着色器, 这就是光栅化
+      // 片元着色器
+      const FSHADER_SOURCE = `
+        uniform sampler2D u_Sampler;
+        precision mediump float;
+        varying vec2 v_TexCoord;
+        void main() {
+          gl_FragColor = texture2D(u_Sampler, v_TexCoord);
+        }
+      `
+      // gl_FragCoord 是当前渲染片元的位置
+
+      // 初始化着色器
+      initShaders(gl, VSHADER_SOURCE, FSHADER_SOURCE)
+      // 设置顶点位置
+      const n = initVertexBuffers(gl)
+      initTextures(gl, n)
+
+      function initVertexBuffers(gl) {
+        const n = 4
+
+        const verticesTexCoords = new Float32Array([
+          -0.5, 0.5, 0.0, 2.0,
+          -0.5, -0.5, 0.0, 0.0,
+          0.5, 0.5, 2.0, 2.0,
+          0.5, -0.5, 2.0, 0.0,
+        ])
+
+        const FSIZE = verticesTexCoords.BYTES_PER_ELEMENT;
+
+        // 只使用一个缓冲区, 一个缓冲区中有多种数据
+        const vertexTexCoordsBuffer = gl.createBuffer()
+        gl.bindBuffer(gl.ARRAY_BUFFER, vertexTexCoordsBuffer)
+        gl.bufferData(gl.ARRAY_BUFFER, verticesTexCoords, gl.STATIC_DRAW)
+
+        // 创建缓冲区对象
+        const a_Position = gl.getAttribLocation(gl.program, 'a_Position')
+        gl.vertexAttribPointer(a_Position, 2, gl.FLOAT, false, FSIZE * 4, 0)
+        gl.enableVertexAttribArray(a_Position)
+
+        const a_TexCoord = gl.getAttribLocation(gl.program, 'a_TexCoord')
+        gl.vertexAttribPointer(a_TexCoord, 2, gl.FLOAT, false, FSIZE * 4, FSIZE * 2)
+        gl.enableVertexAttribArray(a_TexCoord)
+
+        return n
+      }
+
+      function initTextures(gl, n) {
+        // 创建纹理对象
+        const texture = gl.createTexture()
+        const u_Sampler = gl.getUniformLocation(gl.program, 'u_Sampler')
+        const image = new Image()
+        image.onload = () => {
+          // 纹理图像y轴反转  因为图片坐标系和纹理坐标系y轴相反
+          gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
+          // 开启0号单元  一个纹理占用一个单元
+          gl.activeTexture(gl.TEXTURE0)
+          // 向target绑定纹理对象  TEXTURE_2D 二维纹理
+          gl.bindTexture(gl.TEXTURE_2D, texture)
+          // 配置纹理参数  纹理类型 参数 值
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT)
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+          // 配置纹理图像  纹理类型;   level;图像格式;纹理格式;       纹理数据类型;纹理图像
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, image)
+          // 把0号纹理传递给着色器
+          gl.uniform1i(u_Sampler, 0)
+          gl.clearColor(0, 0, 0, .1)
+          gl.clear(gl.COLOR_BUFFER_BIT)
+          // 绘制方式; 开始顶点; 总顶点数;
+          gl.drawArrays(gl.TRIANGLE_STRIP, 0, n)
+        }
+        image.src = './WebGLBook-master/resource/sky.jpg'
+      }
+
+    </script>
+  </body>
+
+</html>

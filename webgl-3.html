@@ -1,0 +1,138 @@
+<!-- 主要包括使用缓冲区绘制, 绘制多个点组成的线面, 位移和旋转 -->
+
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script src="./WebGLBook-master/lib/cuon-matrix.js"></script>
+    <script src="./WebGLBook-master/lib/cuon-utils.js"></script>
+    <script src="./WebGLBook-master/lib/webgl-debug.js"></script>
+    <script src="./WebGLBook-master/lib/webgl-utils.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+  </head>
+
+  <body>
+    <canvas id="mycanvas" height="500" width="500"></canvas>
+    <script>
+      const canvas = document.getElementById('mycanvas')
+      // const gl = canvas.getContext('webgl')
+      const gl = getWebGLContext(canvas)
+      gl.clearColor(0, 0, 0, .1)
+      gl.clear(gl.COLOR_BUFFER_BIT)
+
+      // y轴旋转角度b
+      // x' = x cos b - y sin b
+      // y' = x sin b + y cos b
+
+      // 顶点着色器
+      const VSHADER_SOURCE = `
+        attribute vec4 a_Position;
+        // 位移量
+        // uniform vec4 u_Translation;
+        // 旋转角度
+        uniform float u_CosB, u_SinB;
+        void main() {
+          // 加上位移量
+          // gl_Position = a_Position + u_Translation;
+          // 加上旋转
+          gl_Position.x = a_Position.x * u_CosB - a_Position.y * u_SinB;
+          gl_Position.y = a_Position.x * u_SinB + a_Position.y * u_CosB;
+          gl_Position.z = a_Position.z;
+          gl_Position.w = a_Position.w;
+          // gl_Position = vec4(0,0,0,1);
+        }
+      `
+      // 片元着色器
+      const FSHADER_SOURCE = `
+        void main() {
+          gl_FragColor = vec4(1,1,0,1);
+        }
+      `
+
+      // 定义平移距离
+      const translate = {
+        x: 0.5,
+        y: 0.5,
+        z: 0.0
+      }
+      // 旋转角度
+      const ANGLE = 45.0
+      // 弧度制
+      const radian = Math.PI * ANGLE / 180
+      const cosB = Math.cos(radian)
+      const sinB = Math.sin(radian)
+
+      // 初始化着色器
+      initShaders(gl, VSHADER_SOURCE, FSHADER_SOURCE)
+
+      // 设置顶点位置
+      const n = initVertexBuffers(gl)
+
+      // 把平移距离传递给着色器
+      const u_Translation = gl.getUniformLocation(gl.program, 'u_Translation')
+      gl.uniform4f(u_Translation, translate.x, translate.y, translate.z, 0.0)
+
+      // 把旋转数据给着色器
+      const u_CosB = gl.getUniformLocation(gl.program, 'u_CosB')
+      const u_SinB = gl.getUniformLocation(gl.program, 'u_SinB')
+      gl.uniform1f(u_CosB, cosB)
+      gl.uniform1f(u_SinB, sinB)
+
+      // 绘制方式; 开始顶点; 总顶点数;
+      // gl.drawArrays(gl.POINTS, 0, n)
+      gl.drawArrays(gl.TRIANGLE_FAN, 0, n)
+      // gl.POINTS 点
+      // gl.LINES 线段
+      // gl.LINE_STRIP 线条
+      // gl.LINE_LOOP 回路
+      // gl.TRIANGLE 三角形
+      // gl.TRIANGLE_STRIP 三角带
+      // gl.TRIANGLE_FAN 三角扇
+
+      function initVertexBuffers(gl) {
+        // 不适用array是因为没有对大量同一类型的数组做优化
+        const vertices = new Float32Array([
+          0.5, 0.5,
+          0.5, -0.5,
+          -0.5, 0.5,
+          -0.5, -0.5,
+        ])
+        const n = 4
+
+        // 创建缓冲区对象
+        const vertexBuffer = gl.createBuffer()
+
+        // 将缓冲区对象绑定到目标
+        // gl.ARRAY_BUFFER  缓冲区对象中包含顶点数量
+        gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer)
+
+        // 向缓冲区对象写数据
+        // 第二个参数的数据写入绑定了第一个参数的缓冲区对象
+        gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW)
+
+        const a_Position = gl.getAttribLocation(gl.program, 'a_Position')
+
+        // 将缓冲区对象分配给变量
+        // 所有顶点分配给一个attribute变量
+        // 参数分别为, 位置;大小(每一个顶点的分量数,两个就是x和y);类型
+        gl.vertexAttribPointer(a_Position, 2, gl.FLOAT, false, 0, 0)
+
+        // 连接变量和缓冲区对象
+        gl.enableVertexAttribArray(a_Position)
+
+        return n
+      }
+
+    </script>
+  </body>
+
+</html>

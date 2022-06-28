@@ -1,0 +1,111 @@
+<!-- 主要包括使用库函数来动画 -->
+
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script src="./WebGLBook-master/lib/cuon-matrix.js"></script>
+    <script src="./WebGLBook-master/lib/cuon-utils.js"></script>
+    <script src="./WebGLBook-master/lib/webgl-debug.js"></script>
+    <script src="./WebGLBook-master/lib/webgl-utils.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+  </head>
+
+  <body>
+    <canvas id="mycanvas" height="500" width="500"></canvas>
+    <script>
+      const canvas = document.getElementById('mycanvas')
+      // const gl = canvas.getContext('webgl')
+      const gl = getWebGLContext(canvas)
+      gl.clearColor(0, 0, 0, .1)
+      gl.clear(gl.COLOR_BUFFER_BIT)
+
+      // 顶点着色器
+      const VSHADER_SOURCE = `
+        attribute vec4 a_Position;
+        // 4x4矩阵
+        uniform mat4 u_ModelMatrix;
+        void main() {
+          // 矩阵乘法计算
+          gl_Position = u_ModelMatrix * a_Position;
+        }
+      `
+      // 片元着色器
+      const FSHADER_SOURCE = `
+        void main() {
+          gl_FragColor = vec4(1,1,0,1);
+        }
+      `
+
+      // 旋转
+      const ANGLE_STEP = 1.0
+
+      // 初始化着色器
+      initShaders(gl, VSHADER_SOURCE, FSHADER_SOURCE)
+      // 设置顶点位置
+      const n = initVertexBuffers(gl)
+
+      // 通过库函数创建矩阵对象
+      const modelMatrix = new Matrix4()
+      modelMatrix.setRotate(ANGLE_STEP, 1, 1, 1)
+
+      const u_ModelMatrix = gl.getUniformLocation(gl.program, 'u_ModelMatrix')
+
+      const tick = () => {
+        modelMatrix.rotate(ANGLE_STEP, 1, 1, 1)
+        // 旋转矩阵传输给着色器
+        gl.uniformMatrix4fv(u_ModelMatrix, false, modelMatrix.elements)
+        gl.clear(gl.COLOR_BUFFER_BIT)
+        // 绘制方式; 开始顶点; 总顶点数;
+        gl.drawArrays(gl.TRIANGLE_FAN, 0, n)
+        requestAnimationFrame(tick)
+      }
+      tick()
+
+      function initVertexBuffers(gl) {
+        // 不使用array是因为没有对大量同一类型的数组做优化
+        const vertices = new Float32Array([
+          0.4, 0.4,
+          0.4, -0.4,
+          -0.4, 0.4,
+          -0.4, -0.4,
+        ])
+        const n = 4
+
+        // 创建缓冲区对象
+        const vertexBuffer = gl.createBuffer()
+
+        // 将缓冲区对象绑定到目标
+        // gl.ARRAY_BUFFER  缓冲区对象中包含顶点数量
+        gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer)
+
+        // 向缓冲区对象写数据
+        // 第二个参数的数据写入绑定了第一个参数的缓冲区对象
+        gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW)
+
+        const a_Position = gl.getAttribLocation(gl.program, 'a_Position')
+
+        // 将缓冲区对象分配给变量
+        // 所有顶点分配给一个attribute变量
+        // 参数分别为, 位置;大小(每一个顶点的分量数,两个就是x和y);类型
+        gl.vertexAttribPointer(a_Position, 2, gl.FLOAT, false, 0, 0)
+
+        // 连接变量和缓冲区对象
+        gl.enableVertexAttribArray(a_Position)
+
+        return n
+      }
+
+    </script>
+  </body>
+
+</html>

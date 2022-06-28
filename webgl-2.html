@@ -1,0 +1,104 @@
+<!-- 主要包括着色器, js传递着色器变量 -->
+
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script src="./WebGLBook-master/lib/cuon-matrix.js"></script>
+    <script src="./WebGLBook-master/lib/cuon-utils.js"></script>
+    <script src="./WebGLBook-master/lib/webgl-debug.js"></script>
+    <script src="./WebGLBook-master/lib/webgl-utils.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+  </head>
+
+  <body>
+    <canvas id="mycanvas" height="500" width="500"></canvas>
+    <script>
+      const canvas = document.getElementById('mycanvas')
+      // const gl = canvas.getContext('webgl')
+      const gl = getWebGLContext(canvas)
+      gl.clearColor(0, 0, 0, .1)
+      gl.clear(gl.COLOR_BUFFER_BIT)
+
+      // 顶点着色器
+      const VSHADER_SOURCE = `
+        // 定义attribute变量, 只能是全局的
+        // attribute只能用在顶点着色器
+        attribute vec4 a_Position;
+        attribute float a_PointSize;
+        void main() {
+          gl_Position = a_Position;
+          // gl_Position = vec4(0,0,0,1);
+          gl_PointSize = a_PointSize;
+          // gl_PointSize = 100.0;
+        }
+      `
+      // 片元着色器
+      const FSHADER_SOURCE = `
+        // 这里是精度限定词, 设置变量范围
+        precision mediump float;
+        uniform vec4 u_FragColor;
+        void main() {
+          gl_FragColor = u_FragColor;
+          // gl_FragColor = vec4(0,1,0,1);
+        }
+      `
+
+      // 初始化着色器
+      initShaders(gl, VSHADER_SOURCE, FSHADER_SOURCE)
+
+      // 获得attribute变量的储存位置
+      const a_Position = gl.getAttribLocation(gl.program, 'a_Position')
+      const a_PointSize = gl.getAttribLocation(gl.program, 'a_PointSize')
+      // uniform变量位置
+      const u_FragColor = gl.getUniformLocation(gl.program, 'u_FragColor')
+
+      // 把位置的值值传给变量, 1和2表示传的位数, 没传的位数会自动补充
+      gl.vertexAttrib2f(a_Position, 0.5, 0.5)
+      gl.vertexAttrib1f(a_PointSize, 10.0)
+      gl.uniform4f(u_FragColor, 1, 0, 0, 1)
+
+      gl.drawArrays(gl.POINTS, 0, 1)
+
+
+
+
+      const Points = []
+      // 点击添加点
+      canvas.addEventListener('click', e => {
+        const { x, y } = e
+        // 如果不重绘画布, 颜色缓冲区会画布颜色成透明
+        gl.clear(gl.COLOR_BUFFER_BIT)
+
+        Points.push({
+          x: x / canvas.offsetWidth * 2 - 1,
+          y: 1 - y / canvas.offsetHeight * 2,
+          color: {
+            r: +(x / canvas.offsetWidth).toFixed(2),
+            g: +(y / canvas.offsetHeight).toFixed(2),
+            b: 1,
+            a: 0.5
+          }
+        })
+
+        Points.forEach(i => {
+          gl.vertexAttrib2f(a_Position, i.x, i.y)
+          gl.uniform4f(u_FragColor, i.color.r, i.color.g, i.color.b, i.color.a)
+          gl.drawArrays(gl.POINTS, 0, 1)
+        })
+
+      })
+
+    </script>
+  </body>
+
+</html>

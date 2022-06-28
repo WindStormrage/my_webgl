@@ -1,0 +1,285 @@
+<!-- 主要包括 多关节模型 使用栈来管理model矩阵-->
+
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script src="./WebGLBook-master/lib/cuon-matrix.js"></script>
+    <script src="./WebGLBook-master/lib/cuon-utils.js"></script>
+    <script src="./WebGLBook-master/lib/webgl-debug.js"></script>
+    <script src="./WebGLBook-master/lib/webgl-utils.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+  </head>
+
+  <body>
+    <canvas id="mycanvas" height="500" width="500"></canvas>
+    <script>
+      const canvas = document.getElementById('mycanvas')
+      const gl = getWebGLContext(canvas)
+      gl.clearColor(0, 0, 0, .1)
+      gl.enable(gl.DEPTH_TEST);
+
+      // 顶点着色器
+      const VSHADER_SOURCE = `
+        attribute vec4 a_Position;
+        attribute vec4 a_Color;
+        varying vec4 v_Color;
+        // 法向量
+        attribute vec4 a_Normal;
+        // 变换法向量的矩阵
+        uniform mat4 u_NormalMatrix;
+        uniform mat4 u_MvpMatrix;
+        varying vec3 v_Normal;
+        varying vec4 v_Position;
+        void main() {
+          v_Position = u_MvpMatrix * a_Position;
+          gl_Position = v_Position;
+          // 对法向量进行 归一化
+          v_Normal = normalize((u_NormalMatrix * a_Normal).xyz);
+          v_Color = a_Color;
+        }
+      `
+
+      // 片元其实是每一个像素, 每一个像素点都会执行一次片元着色器, 这就是光栅化
+      // 片元着色器
+      const FSHADER_SOURCE = `
+        precision mediump float;
+        varying vec4 v_Color;
+        varying vec4 v_Position;
+        // 法向量
+        varying vec3 v_Normal;
+        // 光线颜色
+        uniform vec3 u_LightColor;
+        // 环境光颜色
+        uniform vec3 u_AmbientLightColor;
+        // 光的位置
+        uniform vec3 u_LightPosition;
+        void main() {
+          // 对光方向向量进行 归一化
+          vec3 lightDirection = normalize(u_LightPosition - v_Position.xyz);
+          // 入射角的余弦值 = 光线方向 点乘 法向量
+          float nDotL = max(dot(lightDirection, v_Normal), 0.0);
+          // 计算漫反射光颜色  光颜色*物体颜色*入射角余弦值
+          vec3 diffuse = u_LightColor * v_Color.rgb * nDotL;
+          // 计算环境光
+          vec3 ambient = u_AmbientLightColor * v_Color.rgb;
+          // 颜色 = 反射 + 环境
+          gl_FragColor = vec4(diffuse + ambient, v_Color.a);
+        }
+      `
+      initShaders(gl, VSHADER_SOURCE, FSHADER_SOURCE)
+
+      // 光线颜色
+      const u_LightColor = gl.getUniformLocation(gl.program, 'u_LightColor');
+      gl.uniform3f(u_LightColor, 0.0, 1.0, 1.0);
+
+      // 环境光线颜色
+      const u_AmbientLightColor = gl.getUniformLocation(gl.program, 'u_AmbientLightColor');
+      gl.uniform3f(u_AmbientLightColor, 0.2, 0.2, 0.2);
+
+      // 设置点光源位置
+      const u_LightPosition = gl.getUniformLocation(gl.program, 'u_LightPosition');
+      gl.uniform3f(u_LightPosition, 20.0, 0.0, 45.0);
+
+      // 模型
+      const modelMatrix = new Matrix4();
+
+      // 视角 * 投影
+      const viewMatrix = new Matrix4();
+      viewMatrix
+        .setPerspective(50, 1, 1, 100)
+        .lookAt(20.0, 10.0, 30.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
+
+      // 位置
+      const mvpMatrix = new Matrix4();
+      const u_MvpMatrix = gl.getUniformLocation(gl.program, 'u_MvpMatrix');
+
+      // 逆转换矩阵  图形变换时改变平面法向量
+      const normalMatrix = new Matrix4();
+      const u_NormalMatrix = gl.getUniformLocation(gl.program, 'u_NormalMatrix');
+
+      const n = initVertexBuffers(gl)
+
+      // 栈来管理矩阵(类似于canvas的save/restore栈管理)
+      // 储存之前的改变
+      const matrixStack = [];
+      function pushMatrix(m) {
+        matrixStack.push(new Matrix4(m));
+      }
+      function popMatrix() {
+        return matrixStack.pop();
+      }
+
+      const ANGLE_STEP = 3.0
+      let arm1Angle = -90.0
+      let joint1Angle = 0
+      let joint2Angle = 0
+      let joint3Angle = 0
+      document.addEventListener('keydown', e => {
+        switch (e.keyCode) {
+          case 38:// up
+            if (joint1Angle < 135.0) joint1Angle += ANGLE_STEP;
+            break;
+          case 40:// down
+            if (joint1Angle > -135.0) joint1Angle -= ANGLE_STEP;
+            break;
+          case 39:// right
+            arm1Angle = (arm1Angle + ANGLE_STEP) % 360;
+            break;
+          case 37:// left
+            arm1Angle = (arm1Angle - ANGLE_STEP) % 360;
+            break;
+          case 90:// z
+            joint2Angle = (joint2Angle + ANGLE_STEP) % 360;
+            break;
+          case 88:// x
+            joint2Angle = (joint2Angle - ANGLE_STEP) % 360;
+            break;
+          case 67:// c
+            if (joint3Angle < 60.0) joint3Angle += ANGLE_STEP;
+            break;
+          case 86:// v
+            if (joint3Angle > -60.0) joint3Angle -= ANGLE_STEP;
+            break;
+          default:
+            return;
+        }
+        draw()
+      })
+      draw()
+
+      function draw() {
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+
+        // 底座
+        modelMatrix.setTranslate(0.0, -12.0, 0.0);
+        drawBox(10, 2, 10)
+
+        // 手臂1
+        modelMatrix.translate(0.0, 2, 0.0);
+        modelMatrix.rotate(arm1Angle, 0.0, 1.0, 0.0);
+        drawBox(3, 10, 3)
+
+        // 手臂2
+        modelMatrix.translate(0.0, 10, 0.0);
+        modelMatrix.rotate(joint1Angle, 0.0, 0.0, 1.0);
+        drawBox(4, 10, 4)
+
+        // 手掌
+        modelMatrix.translate(0, 10, 0.0);
+        modelMatrix.rotate(joint2Angle, 0.0, 1.0, 0.0);
+        drawBox(2, 2, 6)
+
+        // 移动到手掌中间
+        modelMatrix.translate(0.0, 2.0, 0.0)
+
+        // 手指1
+        // 入栈
+        pushMatrix(modelMatrix)
+        modelMatrix.translate(0.0, 0.0, 2.0);
+        modelMatrix.rotate(joint3Angle, 1.0, 0.0, 0.0);  // Rotate around the x-axis
+        drawBox(1.0, 2.0, 1.0);
+        // 出栈
+        modelMatrix.set(popMatrix());
+
+        // 手指2
+        modelMatrix.translate(0.0, 0.0, -2.0);
+        modelMatrix.rotate(-joint3Angle, 1.0, 0.0, 0.0);  // Rotate around the x-axis
+        drawBox(1.0, 2.0, 1.0);
+      }
+
+      function drawBox(width, height, depth) {
+        // 入栈
+        pushMatrix(modelMatrix)
+        // 方块大小
+        modelMatrix.scale(width, height, depth);
+        // 确定点位置
+        mvpMatrix.set(viewMatrix)
+        mvpMatrix.multiply(modelMatrix)
+        gl.uniformMatrix4fv(u_MvpMatrix, false, mvpMatrix.elements)
+
+        // 逆转矩阵
+        normalMatrix
+          .setInverseOf(modelMatrix)
+          .transpose()
+        gl.uniformMatrix4fv(u_NormalMatrix, false, normalMatrix.elements)
+        // 绘制
+        gl.drawElements(gl.TRIANGLES, n, gl.UNSIGNED_BYTE, 0)
+        // 出栈
+        modelMatrix.set(popMatrix());
+      }
+
+      function initVertexBuffers(gl) {
+        // 位置
+        var vertices = new Float32Array([
+          0.5, 1.0, 0.5, -0.5, 1.0, 0.5, -0.5, 0.0, 0.5, 0.5, 0.0, 0.5, // v0-v1-v2-v3 front
+          0.5, 1.0, 0.5, 0.5, 0.0, 0.5, 0.5, 0.0, -0.5, 0.5, 1.0, -0.5, // v0-v3-v4-v5 right
+          0.5, 1.0, 0.5, 0.5, 1.0, -0.5, -0.5, 1.0, -0.5, -0.5, 1.0, 0.5, // v0-v5-v6-v1 up
+          -0.5, 1.0, 0.5, -0.5, 1.0, -0.5, -0.5, 0.0, -0.5, -0.5, 0.0, 0.5, // v1-v6-v7-v2 left
+          -0.5, 0.0, -0.5, 0.5, 0.0, -0.5, 0.5, 0.0, 0.5, -0.5, 0.0, 0.5, // v7-v4-v3-v2 down
+          0.5, 0.0, -0.5, -0.5, 0.0, -0.5, -0.5, 1.0, -0.5, 0.5, 1.0, -0.5  // v4-v7-v6-v5 back
+        ]);
+        // 颜色
+        var colors = new Float32Array([
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+        ]);
+        // 法向量
+        var normals = new Float32Array([
+          0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0,
+          1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0,
+          0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0,
+          -1.0, 0.0, 0.0, -1.0, 0.0, 0.0, -1.0, 0.0, 0.0, -1.0, 0.0, 0.0,
+          0.0, -1.0, 0.0, 0.0, -1.0, 0.0, 0.0, -1.0, 0.0, 0.0, -1.0, 0.0,
+          0.0, 0.0, -1.0, 0.0, 0.0, -1.0, 0.0, 0.0, -1.0, 0.0, 0.0, -1.0
+        ]);
+        // 索引
+        var indices = new Uint8Array([
+          0, 1, 2, 0, 2, 3,
+          4, 5, 6, 4, 6, 7,
+          8, 9, 10, 8, 10, 11,
+          12, 13, 14, 12, 14, 15,
+          16, 17, 18, 16, 18, 19,
+          20, 21, 22, 20, 22, 23
+        ]);
+
+        // 把顶点索引数据写入缓冲区对象
+        const indexBuffer = gl.createBuffer()
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW)
+
+        initArrayBuffer(gl, 'a_Position', vertices, 3, gl.FLOAT)
+        initArrayBuffer(gl, 'a_Color', colors, 3, gl.FLOAT)
+        initArrayBuffer(gl, 'a_Normal', normals, 3, gl.FLOAT)
+
+        return indices.length
+      }
+
+      function initArrayBuffer(gl, attribute, data, num, type) {
+        const buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+
+        const a_attribute = gl.getAttribLocation(gl.program, attribute);
+        gl.vertexAttribPointer(a_attribute, num, type, false, 0, 0);
+        gl.enableVertexAttribArray(a_attribute);
+        return true;
+      }
+
+    </script>
+  </body>
+
+</html>

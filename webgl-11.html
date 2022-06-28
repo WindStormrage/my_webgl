@@ -1,0 +1,129 @@
+<!-- 主要包括 多个纹理映射 -->
+<!-- 没太懂处理sky以外的图片都不能渲染 -->
+
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script src="./WebGLBook-master/lib/cuon-matrix.js"></script>
+    <script src="./WebGLBook-master/lib/cuon-utils.js"></script>
+    <script src="./WebGLBook-master/lib/webgl-debug.js"></script>
+    <script src="./WebGLBook-master/lib/webgl-utils.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+  </head>
+
+  <body>
+    <canvas id="mycanvas" height="500" width="500"></canvas>
+    <script>
+      const canvas = document.getElementById('mycanvas')
+      const gl = getWebGLContext(canvas)
+
+      // 顶点着色器
+      const VSHADER_SOURCE = `
+        attribute vec4 a_Position;
+        attribute vec2 a_TexCoord;
+        attribute vec2 a_TexCoord1;
+        varying vec2 v_TexCoord;
+        varying vec2 v_TexCoord1;
+        void main() {
+          gl_Position = a_Position;
+          v_TexCoord = a_TexCoord;
+        }
+      `
+      // 片元其实是每一个像素, 每一个像素点都会执行一次片元着色器, 这就是光栅化
+      // 片元着色器
+      const FSHADER_SOURCE = `
+        uniform sampler2D u_Sampler0;
+        uniform sampler2D u_Sampler1;
+        precision mediump float;
+        varying vec2 v_TexCoord;
+        void main() {
+          gl_FragColor = texture2D(u_Sampler0, v_TexCoord) * texture2D(u_Sampler1, v_TexCoord);
+        }
+      `
+      // gl_FragCoord 是当前渲染片元的位置
+
+      // 初始化着色器
+      initShaders(gl, VSHADER_SOURCE, FSHADER_SOURCE)
+      // 设置顶点位置
+      const n = initVertexBuffers(gl)
+      initTextures(gl, n)
+
+      function initVertexBuffers(gl) {
+        const n = 4
+
+        const verticesTexCoords = new Float32Array([
+          -0.5, 0.5, 0.0, 2.0,
+          -0.5, -0.5, 0.0, 0.0,
+          0.5, 0.5, 2.0, 2.0,
+          0.5, -0.5, 2.0, 0.0,
+        ])
+
+        const FSIZE = verticesTexCoords.BYTES_PER_ELEMENT;
+
+        // 只使用一个缓冲区, 一个缓冲区中有多种数据
+        const vertexTexCoordsBuffer = gl.createBuffer()
+        gl.bindBuffer(gl.ARRAY_BUFFER, vertexTexCoordsBuffer)
+        gl.bufferData(gl.ARRAY_BUFFER, verticesTexCoords, gl.STATIC_DRAW)
+
+        // 创建缓冲区对象
+        const a_Position = gl.getAttribLocation(gl.program, 'a_Position')
+        gl.vertexAttribPointer(a_Position, 2, gl.FLOAT, false, FSIZE * 4, 0)
+        gl.enableVertexAttribArray(a_Position)
+
+        const a_TexCoord = gl.getAttribLocation(gl.program, 'a_TexCoord')
+        gl.vertexAttribPointer(a_TexCoord, 2, gl.FLOAT, false, FSIZE * 4, FSIZE * 2)
+        gl.enableVertexAttribArray(a_TexCoord)
+
+        return n
+      }
+
+      function initTextures(gl, n) {
+        // 创建纹理对象
+        const texture0 = gl.createTexture()
+        const texture1 = gl.createTexture()
+        const u_Sampler0 = gl.getUniformLocation(gl.program, 'u_Sampler0')
+        const u_Sampler1 = gl.getUniformLocation(gl.program, 'u_Sampler1')
+        const image0 = new Image()
+        const image1 = new Image()
+        image0.onload = () => {
+          setImage(texture0, u_Sampler0, image0, 0)
+        }
+        image1.onload = () => {
+          setImage(texture1, u_Sampler1, image1, 1)
+        }
+        image0.src = './WebGLBook-master/resource/sky2.jpg'
+        image1.src = './WebGLBook-master/resource/img.jpg'
+      }
+
+      let isFinish = false
+      function setImage(texture, u_Sampler, image, texUnit) {
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
+        gl.activeTexture(gl[`TEXTURE${texUnit}`])
+        gl.bindTexture(gl.TEXTURE_2D, texture)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, image)
+        gl.uniform1i(u_Sampler, texUnit)
+
+        if (isFinish) {
+          gl.clearColor(0, 0, 0, .1)
+          gl.clear(gl.COLOR_BUFFER_BIT)
+          gl.drawArrays(gl.TRIANGLE_STRIP, 0, n)
+        }
+
+        isFinish = true
+      }
+
+    </script>
+  </body>
+
+</html>
